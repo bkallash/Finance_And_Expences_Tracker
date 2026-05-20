@@ -1,12 +1,13 @@
 package service;
 
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
+import jakarta.persistence.EntityManager;
+import model.Category;
+import model.User;
 
 import util.HashUtil;
+
+import java.util.List;
+import java.util.Locale;
 
 public class AuthService {
     private static final String[] DEFAULT_CATEGORIES = {"Food", "Salary", "Transport", "Shopping", "Education"};
@@ -31,8 +32,7 @@ public class AuthService {
         }
 
         String hashed = HashUtil.md5(rawPassword);
-        int createdUserId = createUserInDatabase(firstName, lastName, email, hashed);
-        initializeUserCategoriesInDatabase(createdUserId);
+        createUserInDatabase(firstName, lastName, email, hashed);
         return true;
     }
 
@@ -50,23 +50,18 @@ public class AuthService {
         }
         String inputHash = HashUtil.md5(rawPassword);
 
-        String sql = """
-                SELECT password_hash
-                FROM Users
-                WHERE LOWER(email) = LOWER(?)
-                LIMIT 1
-                """;
-        try (Connection connection = DatabaseConfig.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setString(1, email.trim());
-            try (ResultSet resultSet = statement.executeQuery()) {
-                if (!resultSet.next()) {
-                    return false;
-                }
-                String storedHash = resultSet.getString("password_hash");
-                return storedHash != null && storedHash.equals(inputHash);
+        try (EntityManager entityManager = DatabaseConfig.createEntityManager()) {
+            List<String> hashes = entityManager.createQuery(
+                            "SELECT u.passwordHash FROM User u WHERE LOWER(u.email) = :email", String.class)
+                    .setParameter("email", email.trim().toLowerCase(Locale.ROOT))
+                    .setMaxResults(1)
+                    .getResultList();
+            if (hashes.isEmpty()) {
+                return false;
             }
-        } catch (SQLException e) {
+            String storedHash = hashes.getFirst();
+            return storedHash != null && storedHash.equals(inputHash);
+        } catch (Exception e) {
             throw new RuntimeException("Failed to validate user credentials", e);
         }
     }
@@ -78,62 +73,44 @@ public class AuthService {
      * @return true if a matching email is found; false otherwise
      */
     private boolean emailExists(String email) {
-        String sql = """
-                SELECT 1
-                FROM Users
-                WHERE LOWER(email) = LOWER(?)
-                LIMIT 1
-                """;
-        try (Connection connection = DatabaseConfig.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setString(1, email.trim());
-            try (ResultSet resultSet = statement.executeQuery()) {
-                return resultSet.next();
-            }
-        } catch (SQLException e) {
+        try (EntityManager entityManager = DatabaseConfig.createEntityManager()) {
+            Long count = entityManager.createQuery(
+                            "SELECT COUNT(u) FROM User u WHERE LOWER(u.email) = :email", Long.class)
+                    .setParameter("email", email.trim().toLowerCase(Locale.ROOT))
+                    .getSingleResult();
+            return count != null && count > 0;
+        } catch (Exception e) {
             throw new RuntimeException("Failed to check email existence", e);
         }
     }
 
 
-    private int createUserInDatabase(String firstName, String lastName, String email, String hashedPassword) {
-        String sql = """
-                INSERT INTO Users (first_name, last_name, email, password_hash)
-                VALUES (?, ?, ?, ?)
-                """;
-        try (Connection connection = DatabaseConfig.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-            statement.setString(1, firstName.trim());
-            statement.setString(2, lastName.trim());
-            statement.setString(3, email.trim());
-            statement.setString(4, hashedPassword);
-            int rows = statement.executeUpdate();
-            if (rows == 0) {
-                throw new RuntimeException("Failed to create user record");
-            }
-            try (ResultSet keys = statement.getGeneratedKeys()) {
-                if (keys.next()) {
-                    return keys.getInt(1);
-                }
-            }
-            throw new RuntimeException("Failed to retrieve generated user id");
-        } catch (SQLException e) {
-            throw new RuntimeException("Failed to create user in database", e);
-        }
-    }
+    private void createUserInDatabase(String firstName, String lastName, String email, String hashedPassword) {
+        EntityManager entityManager = DatabaseConfig.createEntityManager();
+        try {
+            entityManager.getTransaction().begin();
 
-    private void initializeUserCategoriesInDatabase(int userId) {
-        String sql = "INSERT INTO Categories (user_id, name) VALUES (?, ?)";
-        try (Connection connection = DatabaseConfig.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql)) {
+            User user = new User();
+            user.setFirstName(firstName.trim());
+            user.setLastName(lastName.trim());
+            user.setEmail(email.trim());
+            user.setPasswordHash(hashedPassword);
+
             for (String categoryName : DEFAULT_CATEGORIES) {
-                statement.setInt(1, userId);
-                statement.setString(2, categoryName);
-                statement.addBatch();
+                Category category = new Category();
+                category.setName(categoryName);
+                user.addCategory(category);
             }
-            statement.executeBatch();
-        } catch (SQLException e) {
-            throw new RuntimeException("Failed to initialize user categories", e);
+
+            entityManager.persist(user);
+            entityManager.getTransaction().commit();
+        } catch (Exception e) {
+            if (entityManager.getTransaction().isActive()) {
+                entityManager.getTransaction().rollback();
+            }
+            throw new RuntimeException("Failed to create user in database", e);
+        } finally {
+            entityManager.close();
         }
     }
 

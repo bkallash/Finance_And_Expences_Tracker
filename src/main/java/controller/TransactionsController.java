@@ -156,6 +156,36 @@ public class TransactionsController {
     }
 
     @FXML
+    protected void onDeleteTransactionButtonClick() {
+        if (selectedTransaction == null) {
+            WindowManager.showErrorAlert("Input Error", "Please select a transaction to delete.");
+            return;
+        }
+
+        try {
+            String email = SessionManager.getLoggedInUserEmail();
+            User user = userService.getUserByEmail(email);
+
+            if (user == null) {
+                WindowManager.showErrorAlert("Input Error", "No logged-in user found.");
+                return;
+            }
+
+            int transactionId = selectedTransaction.getId();
+            transactionService.deleteTransaction(transactionId, user);
+            clearForm();
+            loadTransactions();
+            WindowManager.showInfoAlert("Success", "Transaction deleted successfully.");
+        } catch (IllegalArgumentException e) {
+            WindowManager.showErrorAlert("Input Error", e.getMessage());
+        } catch (Exception e) {
+            String message = e.getMessage();
+            WindowManager.showErrorAlert("Input Error",
+                    (message == null || message.isBlank()) ? "Unable to delete transaction." : message);
+        }
+    }
+
+    @FXML
     protected void onTodayButtonClick() {
         transactionDatePicker.setValue(LocalDate.now());
     }

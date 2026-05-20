@@ -1,38 +1,24 @@
 package service;
 
+import jakarta.persistence.EntityManager;
 import model.User;
 
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.util.List;
+import java.util.Locale;
 
 public class UserService {
     public User getUserByEmail(String email) {
-        String sql = """
-                SELECT id, first_name, last_name, email, password_hash
-                FROM Users
-                WHERE LOWER(email) = LOWER(?)
-                LIMIT 1
-                """;
-        try (Connection connection = DatabaseConfig.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setString(1, email == null ? null : email.trim());
-            try (ResultSet resultSet = statement.executeQuery()) {
-                if (resultSet.next()) {
-                    return new User(
-                            resultSet.getInt("id"),
-                            resultSet.getString("first_name"),
-                            resultSet.getString("last_name"),
-                            resultSet.getString("email"),
-                            resultSet.getString("password_hash")
-                    );
-                }
-            }
-        } catch (SQLException e) {
-            throw new RuntimeException("Failed to fetch user by email", e);
+        if (email == null || email.trim().isEmpty()) {
+            return null;
         }
-        return null;
+        try (EntityManager entityManager = DatabaseConfig.createEntityManager()) {
+            List<User> users = entityManager.createQuery(
+                            "SELECT u FROM User u WHERE LOWER(u.email) = :email", User.class)
+                    .setParameter("email", email.trim().toLowerCase(Locale.ROOT))
+                    .setMaxResults(1)
+                    .getResultList();
+            return users.isEmpty() ? null : users.getFirst();
+        }
     }
 
     public boolean updateUser(User user) {
@@ -40,20 +26,20 @@ public class UserService {
             throw new IllegalArgumentException("Valid user is required");
         }
 
-        String sql = """
-                UPDATE Users
-                SET first_name = ?, last_name = ?, email = ?, password_hash = ?
-                WHERE id = ?
-                """;
-        try (Connection connection = DatabaseConfig.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setString(1, user.getFirstName());
-            statement.setString(2, user.getLastName());
-            statement.setString(3, user.getEmail());
-            statement.setString(4, user.getPasswordHash());
-            statement.setInt(5, user.getId());
-            return statement.executeUpdate() > 0;
-        } catch (SQLException e) {
+        try (EntityManager entityManager = DatabaseConfig.createEntityManager()) {
+            entityManager.getTransaction().begin();
+            User managed = entityManager.find(User.class, user.getId());
+            if (managed == null) {
+                entityManager.getTransaction().rollback();
+                return false;
+            }
+            managed.setFirstName(user.getFirstName());
+            managed.setLastName(user.getLastName());
+            managed.setEmail(user.getEmail());
+            managed.setPasswordHash(user.getPasswordHash());
+            entityManager.getTransaction().commit();
+            return true;
+        } catch (Exception e) {
             throw new RuntimeException("Failed to update user", e);
         }
     }
@@ -63,12 +49,21 @@ public class UserService {
             throw new IllegalArgumentException("Email is required");
         }
 
-        String sql = "DELETE FROM Users WHERE LOWER(email) = LOWER(?)";
-        try (Connection connection = DatabaseConfig.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setString(1, email.trim());
-            return statement.executeUpdate() > 0;
-        } catch (SQLException e) {
+        try (EntityManager entityManager = DatabaseConfig.createEntityManager()) {
+            entityManager.getTransaction().begin();
+            List<User> users = entityManager.createQuery(
+                            "SELECT u FROM User u WHERE LOWER(u.email) = :email", User.class)
+                    .setParameter("email", email.trim().toLowerCase(Locale.ROOT))
+                    .setMaxResults(1)
+                    .getResultList();
+            if (users.isEmpty()) {
+                entityManager.getTransaction().rollback();
+                return false;
+            }
+            entityManager.remove(users.getFirst());
+            entityManager.getTransaction().commit();
+            return true;
+        } catch (Exception e) {
             throw new RuntimeException("Failed to delete user", e);
         }
     }

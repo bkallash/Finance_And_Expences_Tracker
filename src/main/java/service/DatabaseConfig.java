@@ -1,18 +1,17 @@
 package service;
 
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.SQLException;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityManagerFactory;
+import jakarta.persistence.Persistence;
 
 public final class DatabaseConfig {
-    private static final String DEFAULT_URL = "jdbc:mysql://localhost:3306/finance_and_expences_tracker";
-    private static final String DEFAULT_USER = "root";
-    private static final String DEFAULT_PASSWORD = "";
+    private static final EntityManagerFactory ENTITY_MANAGER_FACTORY =
+            Persistence.createEntityManagerFactory("financeTrackerPU");
 
     private DatabaseConfig() {
     }
 
-    public static Connection getConnection() throws SQLException {
-        return DriverManager.getConnection(DEFAULT_URL, DEFAULT_USER, DEFAULT_PASSWORD);
+    public static EntityManager createEntityManager() {
+        return ENTITY_MANAGER_FACTORY.createEntityManager();
     }
 }

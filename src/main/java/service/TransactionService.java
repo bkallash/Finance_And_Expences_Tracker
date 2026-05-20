@@ -1,164 +1,177 @@
 package service;
 
+import jakarta.persistence.EntityManager;
 import model.Category;
 import model.Transaction;
 import model.User;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.sql.Connection;
-import java.sql.Date;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.util.Locale;
 
 public class TransactionService {
-    private final List<Transaction> transactions = new ArrayList<>();
-    private Integer loadedUserId;
     private final UserService userService = new UserService();
-    private final CategoryService categoryService = new CategoryService();
 
     public List<Transaction> getAllTransactions() {
-        User currentUser = getCurrentUser();
-        if (currentUser == null) {
-            transactions.clear();
-            loadedUserId = null;
-            return transactions;
+        String email = SessionManager.getLoggedInUserEmail();
+        if (email == null || email.trim().isEmpty()) {
+            return List.of();
         }
 
-        transactions.clear();
-        loadedUserId = currentUser.getId();
-
-        String sql = """
-                SELECT t.id, t.amount, t.type, t.date, c.id AS category_id, c.name AS category_name
-                FROM Transactions t
-                JOIN Categories c ON c.id = t.category_id
-                WHERE t.user_id = ?
-                ORDER BY t.id
-                """;
-        try (Connection connection = DatabaseConfig.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setInt(1, currentUser.getId());
-            try (ResultSet resultSet = statement.executeQuery()) {
-                while (resultSet.next()) {
-                    Category category = new Category(
-                            resultSet.getInt("category_id"),
-                            resultSet.getString("category_name")
-                    );
-                    transactions.add(new Transaction(
-                            resultSet.getInt("id"),
-                            currentUser,
-                            category,
-                            resultSet.getDouble("amount"),
-                            resultSet.getString("type"),
-                            resultSet.getDate("date").toString()
-                    ));
-                }
+        try (EntityManager entityManager = DatabaseConfig.createEntityManager()) {
+            User user = getUserWithTransactions(entityManager, email);
+            if (user == null) {
+                return List.of();
             }
-        } catch (SQLException e) {
-            throw new RuntimeException("Failed to load transactions.", e);
+            return user.getTransactions().stream()
+                    .sorted((a, b) -> Integer.compare(a.getId(), b.getId()))
+                    .toList();
         }
-
-        return transactions;
     }
 
     public void addTransaction(User user, Category category, double amount, String type, String date) {
         validateTransactionData(user, category, amount, type, date);
 
-        String sql = """
-                INSERT INTO Transactions (user_id, category_id, amount, type, date)
-                VALUES (?, ?, ?, ?, ?)
-                """;
-        try (Connection connection = DatabaseConfig.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setInt(1, user.getId());
-            statement.setInt(2, category.getId());
-            statement.setDouble(3, amount);
-            statement.setString(4, type.trim());
-            statement.setDate(5, Date.valueOf(date.trim()));
-            statement.executeUpdate();
-            if (loadedUserId != null && loadedUserId.equals(user.getId())) {
-                transactions.clear();
-                getAllTransactions();
+        EntityManager entityManager = DatabaseConfig.createEntityManager();
+        try {
+            entityManager.getTransaction().begin();
+            User managedUser = entityManager.find(User.class, user.getId());
+            if (managedUser == null) {
+                throw new IllegalStateException("No logged-in user found.");
             }
-        } catch (SQLException e) {
+            Transaction transaction = new Transaction();
+            transaction.setCategory(entityManager.getReference(Category.class, category.getId()));
+            transaction.setAmount(amount);
+            transaction.setType(type.trim());
+            transaction.setDate(date.trim());
+            managedUser.addTransaction(transaction);
+            entityManager.getTransaction().commit();
+        } catch (Exception e) {
+            if (entityManager.getTransaction().isActive()) {
+                entityManager.getTransaction().rollback();
+            }
             throw new RuntimeException("Failed to save transaction.", e);
+        } finally {
+            entityManager.close();
         }
     }
 
     public void updateTransaction(int id, User user, Category category, double amount, String type, String date) {
         validateTransactionData(user, category, amount, type, date);
 
-        Integer currentUserId = user == null ? null : user.getId();
-        if (currentUserId == null) {
+        if (user == null || user.getId() <= 0) {
             throw new IllegalStateException("No logged-in user found.");
         }
 
-        getAllTransactions();
-        boolean found = false;
-
-        for (Transaction t : transactions) {
-            if (t.getId() == id) {
-                t.setUser(user);
-                t.setCategory(category);
-                t.setAmount(amount);
-                t.setType(type.trim());
-                t.setDate(date.trim());
-                found = true;
-                break;
+        EntityManager entityManager = DatabaseConfig.createEntityManager();
+        try {
+            entityManager.getTransaction().begin();
+            String email = SessionManager.getLoggedInUserEmail();
+            User managedUser = getUserWithTransactions(entityManager, email);
+            if (managedUser == null || managedUser.getId() != user.getId()) {
+                throw new IllegalStateException("No logged-in user found.");
             }
-        }
 
-        if (!found) {
-            throw new IllegalArgumentException("Transaction not found.");
-        }
-
-        String sql = """
-                UPDATE Transactions
-                SET category_id = ?, amount = ?, type = ?, date = ?
-                WHERE id = ? AND user_id = ?
-                """;
-        try (Connection connection = DatabaseConfig.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setInt(1, category.getId());
-            statement.setDouble(2, amount);
-            statement.setString(3, type.trim());
-            statement.setDate(4, Date.valueOf(date.trim()));
-            statement.setInt(5, id);
-            statement.setInt(6, currentUserId);
-            int rows = statement.executeUpdate();
-            if (rows == 0) {
+            Transaction transaction = managedUser.getTransactions().stream()
+                    .filter(t -> t.getId() == id)
+                    .findFirst()
+                    .orElse(null);
+            if (transaction == null) {
                 throw new IllegalArgumentException("Transaction not found.");
             }
-            transactions.clear();
-            getAllTransactions();
-        } catch (SQLException e) {
+            transaction.setCategory(entityManager.getReference(Category.class, category.getId()));
+            transaction.setAmount(amount);
+            transaction.setType(type.trim());
+            transaction.setDate(date.trim());
+            entityManager.getTransaction().commit();
+        } catch (IllegalArgumentException e) {
+            if (entityManager.getTransaction().isActive()) {
+                entityManager.getTransaction().rollback();
+            }
+            throw e;
+        } catch (Exception e) {
+            if (entityManager.getTransaction().isActive()) {
+                entityManager.getTransaction().rollback();
+            }
             throw new RuntimeException("Failed to update transaction.", e);
+        } finally {
+            entityManager.close();
+        }
+    }
+
+    public void deleteTransaction(int id, User user) {
+        if (user == null || user.getId() <= 0) {
+            throw new IllegalStateException("No logged-in user found.");
+        }
+
+        EntityManager entityManager = DatabaseConfig.createEntityManager();
+        try {
+            entityManager.getTransaction().begin();
+            String email = SessionManager.getLoggedInUserEmail();
+            User managedUser = getUserWithTransactions(entityManager, email);
+            if (managedUser == null || managedUser.getId() != user.getId()) {
+                throw new IllegalStateException("No logged-in user found.");
+            }
+
+            Transaction transaction = managedUser.getTransactions().stream()
+                    .filter(t -> t.getId() == id)
+                    .findFirst()
+                    .orElse(null);
+            if (transaction == null) {
+                throw new IllegalArgumentException("Transaction not found.");
+            }
+
+            managedUser.getTransactions().remove(transaction);
+            entityManager.remove(transaction);
+            entityManager.getTransaction().commit();
+        } catch (IllegalArgumentException e) {
+            if (entityManager.getTransaction().isActive()) {
+                entityManager.getTransaction().rollback();
+            }
+            throw e;
+        } catch (Exception e) {
+            if (entityManager.getTransaction().isActive()) {
+                entityManager.getTransaction().rollback();
+            }
+            throw new RuntimeException("Failed to delete transaction.", e);
+        } finally {
+            entityManager.close();
         }
     }
 
     public double getTotalIncome() {
-        double sum = 0;
-
-        for (Transaction t : getAllTransactions()) {
-            if ("Income".equalsIgnoreCase(t.getType())) {
-                sum += t.getAmount();
-            }
+        User user = getCurrentUser();
+        if (user == null) {
+            return 0;
         }
-
-        return sum;
+        try (EntityManager entityManager = DatabaseConfig.createEntityManager()) {
+            Double total = entityManager.createQuery("""
+                            SELECT COALESCE(SUM(t.amount), 0)
+                            FROM Transaction t
+                            WHERE t.user.id = :userId AND LOWER(t.type) = :type
+                            """, Double.class)
+                    .setParameter("userId", user.getId())
+                    .setParameter("type", "income")
+                    .getSingleResult();
+            return total == null ? 0 : total;
+        }
     }
 
     public double getTotalExpenses() {
-        double sum = 0;
-
-        for (Transaction t : getAllTransactions()) {
-            if ("Expense".equalsIgnoreCase(t.getType())) {
-                sum += t.getAmount();
-            }
+        User user = getCurrentUser();
+        if (user == null) {
+            return 0;
         }
-
-        return sum;
+        try (EntityManager entityManager = DatabaseConfig.createEntityManager()) {
+            Double total = entityManager.createQuery("""
+                            SELECT COALESCE(SUM(t.amount), 0)
+                            FROM Transaction t
+                            WHERE t.user.id = :userId AND LOWER(t.type) = :type
+                            """, Double.class)
+                    .setParameter("userId", user.getId())
+                    .setParameter("type", "expense")
+                    .getSingleResult();
+            return total == null ? 0 : total;
+        }
     }
 
     private void validateTransactionData(User user, Category category, double amount, String type, String date) {
@@ -174,7 +187,8 @@ public class TransactionService {
             throw new IllegalArgumentException("Amount must be greater than 0.");
         }
 
-        if (!type.equalsIgnoreCase("Income") && !type.equalsIgnoreCase("Expense")) {
+        String normalizedType = type.trim().toLowerCase(Locale.ROOT);
+        if (!normalizedType.equals("income") && !normalizedType.equals("expense")) {
             throw new IllegalArgumentException("Type must be either Income or Expense.");
         }
     }
@@ -187,5 +201,22 @@ public class TransactionService {
         }
 
         return userService.getUserByEmail(email);
+    }
+
+    private User getUserWithTransactions(EntityManager entityManager, String email) {
+        if (email == null || email.trim().isEmpty()) {
+            return null;
+        }
+        return entityManager.createQuery("""
+                        SELECT DISTINCT u
+                        FROM User u
+                        LEFT JOIN FETCH u.transactions t
+                        LEFT JOIN FETCH t.category
+                        WHERE LOWER(u.email) = :email
+                        """, User.class)
+                .setParameter("email", email.trim().toLowerCase(Locale.ROOT))
+                .getResultStream()
+                .findFirst()
+                .orElse(null);
     }
 }

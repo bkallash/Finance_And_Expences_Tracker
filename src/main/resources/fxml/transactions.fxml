@@ -48,6 +48,8 @@
                 <Button fx:id="addEditTransactionButton" onAction="#onAddEditTransactionButtonClick" prefWidth="180.0" styleClass="primary-button compact-button" text="Add / Edit Transaction" />
 
                 <Button fx:id="clearButton" onAction="#onClearButtonClick" prefWidth="180.0" styleClass="secondary-button compact-button" text="Clear" />
+
+                <Button fx:id="deleteTransactionButton" onAction="#onDeleteTransactionButtonClick" prefWidth="180.0" styleClass="primary-button compact-button" text="Delete Transaction" />
             </children>
         </VBox>
     </left>
