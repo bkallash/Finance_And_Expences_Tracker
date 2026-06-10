@@ -4,6 +4,7 @@ import javafx.event.ActionEvent;
 import javafx.fxml.FXMLLoader;
 import javafx.fxml.FXML;
 import javafx.scene.Parent;
+import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.PasswordField;
 import javafx.scene.control.TextField;
@@ -31,6 +32,9 @@ public class LoginController {
     private Label errorLabel;
 
     @FXML
+    private Button loginButton;
+
+    @FXML
     protected void onLoginButtonClick() {
         clearInlineMessage();
         String email = emailField.getText();
@@ -46,32 +50,45 @@ public class LoginController {
             return;
         }
 
-        try {
-            boolean isValid = authService.validateUser(email, password);
+        loginButton.setDisable(true);
+        javafx.concurrent.Task<Boolean> loginTask = new javafx.concurrent.Task<>() {
+            @Override
+            protected Boolean call() throws Exception {
+                return authService.validateUser(email, password);
+            }
+        };
 
-            if (isValid) {
-                SessionManager.setLoggedInUserEmail(email);
+        loginTask.setOnSucceeded(event -> {
+            loginButton.setDisable(false);
+            if (loginTask.getValue()) {
+                try {
+                    SessionManager.setLoggedInUserEmail(email);
 
-                FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/dashboard.fxml"));
-                Parent root = loader.load();
+                    FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/dashboard.fxml"));
+                    Parent root = loader.load();
 
-                DashboardController dashboardController = loader.getController();
-                dashboardController.setUserEmail(email);
+                    DashboardController dashboardController = loader.getController();
+                    dashboardController.setUserEmail(email);
 
-               Stage stage = (Stage) emailField.getScene().getWindow();
-               WindowManager.applyFixedSceneWithSize(stage, root, "Dashboard",
-                       WindowManager.DASHBOARD_WIDTH, WindowManager.DASHBOARD_HEIGHT);
+                    Stage stage = (Stage) emailField.getScene().getWindow();
+                    WindowManager.applyFixedSceneWithSize(stage, root, "Dashboard",
+                            WindowManager.DASHBOARD_WIDTH, WindowManager.DASHBOARD_HEIGHT);
+                } catch (IOException e) {
+                    showError("Unable to load dashboard page.");
+                    e.printStackTrace();
+                }
             } else {
                 showError("Incorrect email or password.");
             }
+        });
 
-        } catch (IOException e) {
-            showError("Unable to load dashboard page.");
-            e.printStackTrace();
-        } catch (Exception ex) {
+        loginTask.setOnFailed(event -> {
+            loginButton.setDisable(false);
             showError("Unable to login. Please try again.");
-            ex.printStackTrace();
-        }
+            loginTask.getException().printStackTrace();
+        });
+
+        new Thread(loginTask).start();
     }
 
     @FXML

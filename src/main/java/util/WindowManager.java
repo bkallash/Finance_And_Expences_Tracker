@@ -16,8 +16,8 @@ public class WindowManager {
     public static final double AUTH_HEIGHT = 470.0;
     public static final double SIGNUP_WIDTH = 620.0;
     public static final double SIGNUP_HEIGHT = 700.0;
-    public static final double DASHBOARD_WIDTH = 1220.0;
-    public static final double DASHBOARD_HEIGHT = 680.0;
+    public static final double DASHBOARD_WIDTH = 1350.0;
+    public static final double DASHBOARD_HEIGHT = 780.0;
 
     private static final double MIN_WIDTH = 800.0;
     private static final double MIN_HEIGHT = 500.0;

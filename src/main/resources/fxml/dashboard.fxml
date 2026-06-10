@@ -10,8 +10,8 @@
 <?import javafx.scene.layout.VBox?>
 
 <BorderPane fx:id="rootPane"
-            prefHeight="620.0"
-            prefWidth="1220.0"
+            prefHeight="780.0"
+            prefWidth="1350.0"
             minHeight="500.0"
             minWidth="900.0"
             maxHeight="Infinity"
@@ -67,6 +67,12 @@
                 <Button fx:id="reportsButton"
                         text="Reports"
                         onAction="#onReportsButtonClick"
+                        maxWidth="Infinity"
+                        prefHeight="46.0"
+                        styleClass="primary-button compact-button" />
+                <Button fx:id="statementButton"
+                        text="Statement"
+                        onAction="#onStatementButtonClick"
                         maxWidth="Infinity"
                         prefHeight="46.0"
                         styleClass="primary-button compact-button" />

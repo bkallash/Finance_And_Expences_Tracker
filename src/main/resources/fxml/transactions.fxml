@@ -5,22 +5,40 @@
 <?import javafx.scene.control.ComboBox?>
 <?import javafx.scene.control.DatePicker?>
 <?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ProgressIndicator?>
 <?import javafx.scene.control.TableColumn?>
 <?import javafx.scene.control.TableView?>
 <?import javafx.scene.control.TextField?>
 <?import javafx.scene.layout.BorderPane?>
 <?import javafx.scene.layout.HBox?>
-<?import javafx.scene.layout.Priority?>
+<?import javafx.scene.layout.Pane?>
 <?import javafx.scene.layout.VBox?>
 
-<BorderPane prefHeight="500.0" prefWidth="860.0" stylesheets="@../css/app.css"  xmlns="http://javafx.com/javafx/25" xmlns:fx="http://javafx.com/fxml/1" fx:controller="controller.TransactionsController">
+<BorderPane prefHeight="600.0" prefWidth="950.0" stylesheets="@../css/app.css" xmlns="http://javafx.com/javafx/17" xmlns:fx="http://javafx.com/fxml/1" fx:controller="controller.TransactionsController">
 
     <top>
-        <Label styleClass="compact-page-title" text="Transactions Management" BorderPane.alignment="CENTER">
-            <BorderPane.margin>
-                <Insets bottom="12.0" top="12.0" />
-            </BorderPane.margin>
-        </Label>
+        <VBox alignment="CENTER">
+            <children>
+                <Label styleClass="compact-page-title" text="Transactions Management">
+                    <VBox.margin>
+                        <Insets bottom="6.0" top="12.0" />
+                    </VBox.margin>
+                </Label>
+                <HBox alignment="CENTER_LEFT" spacing="12.0" styleClass="nav-bar">
+                    <padding>
+                        <Insets bottom="8.0" left="15.0" right="15.0" top="8.0" />
+                    </padding>
+                    <children>
+                        <Button fx:id="refreshButton" onAction="#onRefreshButtonClick" prefWidth="90.0" styleClass="secondary-button compact-button" text="Refresh" />
+                        <Button fx:id="summaryButton" onAction="#onGenerateSummaryButtonClick" prefWidth="170.0" styleClass="secondary-button compact-button" text="Category Summary" />
+                        <Button fx:id="cancelButton" disable="true" onAction="#onCancelButtonClick" prefWidth="80.0" styleClass="secondary-button compact-button" text="Cancel" />
+                        <ProgressIndicator fx:id="loadingIndicator" prefHeight="24.0" prefWidth="24.0" visible="false" />
+                        <Label fx:id="statusLabel" styleClass="message-label" />
+                        <Pane HBox.hgrow="ALWAYS" />
+                    </children>
+                </HBox>
+            </children>
+        </VBox>
     </top>
 
     <left>
@@ -75,7 +93,7 @@
                     </children>
                 </HBox>
 
-                <TableView fx:id="transactionsTable" prefHeight="330.0" prefWidth="560.0">
+                <TableView fx:id="transactionsTable" prefHeight="400.0" prefWidth="560.0" VBox.vgrow="ALWAYS">
                     <columns>
                         <TableColumn fx:id="idColumn" prefWidth="52.0" text="ID" />
                         <TableColumn fx:id="categoryNameColumn" prefWidth="160.0" text="Category Name" />
@@ -101,4 +119,3 @@
     </bottom>
 
 </BorderPane>
-

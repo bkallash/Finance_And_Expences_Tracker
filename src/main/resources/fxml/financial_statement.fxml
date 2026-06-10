@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.ComboBox?>
+<?import javafx.scene.control.DatePicker?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ProgressIndicator?>
+<?import javafx.scene.control.TextArea?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+
+<VBox prefHeight="620.0" prefWidth="980.0" spacing="16.0" styleClass="report-root" stylesheets="@../css/app.css" xmlns="http://javafx.com/javafx/25" xmlns:fx="http://javafx.com/fxml/1" fx:controller="controller.FinancialStatementController">
+    <padding>
+        <Insets bottom="20.0" left="20.0" right="20.0" top="20.0" />
+    </padding>
+
+    <children>
+        <VBox spacing="4.0">
+            <children>
+                <Label styleClass="compact-page-title" text="Financial Statement Generation" />
+                <Label styleClass="sub-heading" text="Select a date range to generate a detailed text-based financial report." />
+            </children>
+        </VBox>
+
+        <VBox spacing="14.0" styleClass="content-card">
+            <padding>
+                <Insets bottom="20.0" left="20.0" right="20.0" top="20.0" />
+            </padding>
+            <children>
+                <HBox alignment="CENTER_LEFT" spacing="16.0">
+                    <children>
+                        <VBox spacing="6.0">
+                            <children>
+                                <Label styleClass="field-label" text="From Date" />
+                                <DatePicker fx:id="fromDatePicker" styleClass="field-input" />
+                            </children>
+                        </VBox>
+                        <VBox spacing="6.0">
+                            <children>
+                                <Label styleClass="field-label" text="To Date" />
+                                <DatePicker fx:id="toDatePicker" styleClass="field-input" />
+                            </children>
+                        </VBox>
+                        <VBox spacing="6.0">
+                            <children>
+                                <Label styleClass="field-label" text="Category (Optional)" />
+                                <ComboBox fx:id="categoryComboBox" prefWidth="180.0" promptText="All Categories" styleClass="field-input" />
+                            </children>
+                        </VBox>
+                    </children>
+                </HBox>
+
+                <HBox alignment="CENTER_LEFT" spacing="16.0">
+                    <children>
+                        <Button fx:id="generateButton" onAction="#onGenerateButtonClick" prefWidth="160.0" styleClass="primary-button" text="Generate Statement" />
+                        <Button fx:id="cancelButton" disable="true" onAction="#onCancelButtonClick" prefWidth="100.0" styleClass="secondary-button" text="Cancel" />
+                        <ProgressIndicator fx:id="loadingIndicator" prefHeight="24.0" prefWidth="24.0" visible="false" />
+                        <Label fx:id="statusLabel" styleClass="message-label" />
+                    </children>
+                </HBox>
+            </children>
+        </VBox>
+
+        <VBox spacing="8.0" VBox.vgrow="ALWAYS">
+            <children>
+                <Label styleClass="field-label" text="Generated Statement Output" />
+                <TextArea fx:id="statementTextArea" editable="false" prefHeight="300.0" styleClass="field-input" wrapText="true" VBox.vgrow="ALWAYS" />
+            </children>
+        </VBox>
+    </children>
+</VBox>

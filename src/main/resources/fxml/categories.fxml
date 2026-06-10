@@ -19,13 +19,20 @@
             fx:controller="controller.CategoriesController">
 
     <top>
-        <Label text="Categories Management"
-               styleClass="page-title"
-               BorderPane.alignment="CENTER">
-            <BorderPane.margin>
-                <Insets top="20.0" bottom="20.0" />
-            </BorderPane.margin>
-        </Label>
+        <VBox alignment="CENTER">
+            <children>
+                <Label text="Categories Management" styleClass="page-title">
+                    <VBox.margin>
+                        <Insets top="20.0" bottom="6.0" />
+                    </VBox.margin>
+                </Label>
+                <javafx.scene.control.ProgressIndicator fx:id="loadingIndicator" prefHeight="24.0" prefWidth="24.0" visible="false">
+                    <VBox.margin>
+                        <Insets bottom="10.0" />
+                    </VBox.margin>
+                </javafx.scene.control.ProgressIndicator>
+            </children>
+        </VBox>
     </top>
 
     <left>

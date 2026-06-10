@@ -1,192 +1,69 @@
 package service;
 
-import jakarta.persistence.EntityManager;
+import javafx.concurrent.Task;
 import model.Category;
 import model.User;
+import repository.CategoryRepository;
+import service.SessionManager;
+import service.UserService;
 
-import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
-import java.util.Locale;
 
 public class CategoryService {
+    private final CategoryRepository categoryRepository = new CategoryRepository();
+    private final UserService userService = new UserService();
 
     public List<Category> getAllCategories() {
-        String email = SessionManager.getLoggedInUserEmail();
-        if (email == null || email.trim().isEmpty()) {
-            return List.of();
-        }
+        return categoryRepository.findAll();
+    }
 
-        try (EntityManager entityManager = DatabaseConfig.createEntityManager()) {
-            User user = getUserWithCategories(entityManager, email);
-            if (user == null) {
-                return List.of();
+    /**
+     * Creates a Task to load all categories asynchronously.
+     * @return A Task that returns a List of Categories.
+     */
+    public Task<List<Category>> getAllCategoriesTask() {
+        return new Task<>() {
+            @Override
+            protected List<Category> call() throws Exception {
+                return getAllCategories();
             }
-            List<Category> categories = new ArrayList<>(user.getCategories());
-            categories.sort(Comparator.comparingInt(Category::getId));
-            return categories;
-        }
+        };
     }
 
     public void addCategory(String name) {
         if (name == null || name.trim().isEmpty()) {
-            throw new IllegalArgumentException("Category name is required.");
+            throw new IllegalArgumentException("Category name cannot be empty.");
         }
 
-        String email = SessionManager.getLoggedInUserEmail();
-        if (email == null || email.trim().isEmpty()) {
-            throw new IllegalStateException("No logged-in user found.");
+        if (categoryRepository.findByName(name) != null) {
+            throw new IllegalArgumentException("Category with this name already exists.");
         }
 
-        String trimmedName = name.trim();
-        String normalizedInput = normalizeName(trimmedName);
-        EntityManager entityManager = DatabaseConfig.createEntityManager();
-        try {
-            entityManager.getTransaction().begin();
-
-            User user = getUserWithCategories(entityManager, email);
-            if (user == null) {
-                throw new IllegalStateException("No logged-in user found.");
-            }
-
-            boolean exists = user.getCategories().stream()
-                    .map(Category::getName)
-                    .map(this::normalizeName)
-                    .anyMatch(normalizedInput::equals);
-            if (exists) {
-                throw new IllegalArgumentException("Category already exists.");
-            }
-
-            Category category = new Category();
-            category.setName(trimmedName);
-            user.addCategory(category);
-            entityManager.getTransaction().commit();
-        } catch (IllegalArgumentException e) {
-            if (entityManager.getTransaction().isActive()) {
-                entityManager.getTransaction().rollback();
-            }
-            throw e;
-        } catch (Exception e) {
-            if (entityManager.getTransaction().isActive()) {
-                entityManager.getTransaction().rollback();
-            }
-            throw new RuntimeException("Failed to save category.", e);
-        } finally {
-            entityManager.close();
-        }
+        User user = userService.getUserByEmail(SessionManager.getLoggedInUserEmail());
+        Category category = new Category();
+        category.setName(name.trim());
+        category.setUser(user);
+        categoryRepository.save(category);
     }
 
     public void updateCategory(int id, String newName) {
         if (newName == null || newName.trim().isEmpty()) {
-            throw new IllegalArgumentException("Category name is required.");
+            throw new IllegalArgumentException("Category name cannot be empty.");
         }
 
-        String trimmedName = newName.trim();
-        String normalizedInput = normalizeName(trimmedName);
-        String email = SessionManager.getLoggedInUserEmail();
-        if (email == null || email.trim().isEmpty()) {
-            throw new IllegalStateException("No logged-in user found.");
+        Category category = categoryRepository.findByName(newName);
+        if (category != null && category.getId() != id) {
+            throw new IllegalArgumentException("Another category with this name already exists.");
         }
 
-        EntityManager entityManager = DatabaseConfig.createEntityManager();
-        try {
-            entityManager.getTransaction().begin();
-
-            User user = getUserWithCategories(entityManager, email);
-            if (user == null) {
-                throw new IllegalStateException("No logged-in user found.");
-            }
-
-            Category category = user.getCategories().stream()
-                    .filter(c -> c.getId() == id)
-                    .findFirst()
-                    .orElse(null);
-            if (category == null) {
-                throw new IllegalArgumentException("Category not found.");
-            }
-
-            boolean exists = user.getCategories().stream()
-                    .filter(c -> c.getId() != id)
-                    .map(Category::getName)
-                    .map(this::normalizeName)
-                    .anyMatch(normalizedInput::equals);
-            if (exists) {
-                throw new IllegalArgumentException("Category already exists.");
-            }
-
-            category.setName(trimmedName);
-            entityManager.getTransaction().commit();
-        } catch (IllegalArgumentException e) {
-            if (entityManager.getTransaction().isActive()) {
-                entityManager.getTransaction().rollback();
-            }
-            throw e;
-        } catch (Exception e) {
-            if (entityManager.getTransaction().isActive()) {
-                entityManager.getTransaction().rollback();
-            }
-            throw new RuntimeException("Failed to update category.", e);
-        } finally {
-            entityManager.close();
-        }
+        Category toUpdate = new Category();
+        toUpdate.setId(id);
+        toUpdate.setName(newName.trim());
+        toUpdate.setUser(userService.getUserByEmail(SessionManager.getLoggedInUserEmail()));
+        categoryRepository.save(toUpdate);
     }
 
     public void deleteCategory(int id) {
-        String email = SessionManager.getLoggedInUserEmail();
-        if (email == null || email.trim().isEmpty()) {
-            throw new IllegalStateException("No logged-in user found.");
-        }
-
-        EntityManager entityManager = DatabaseConfig.createEntityManager();
-        try {
-            entityManager.getTransaction().begin();
-
-            User user = getUserWithCategories(entityManager, email);
-            if (user == null) {
-                throw new IllegalStateException("No logged-in user found.");
-            }
-
-            Category category = user.getCategories().stream()
-                    .filter(c -> c.getId() == id)
-                    .findFirst()
-                    .orElse(null);
-            if (category == null) {
-                throw new IllegalArgumentException("Category not found.");
-            }
-            if (!category.getTransactions().isEmpty()) {
-                throw new IllegalArgumentException("Cannot delete category with existing transactions.");
-            }
-            user.getCategories().remove(category);
-            entityManager.getTransaction().commit();
-        } catch (IllegalArgumentException e) {
-            if (entityManager.getTransaction().isActive()) {
-                entityManager.getTransaction().rollback();
-            }
-            throw e;
-        } catch (Exception e) {
-            if (entityManager.getTransaction().isActive()) {
-                entityManager.getTransaction().rollback();
-            }
-            throw new RuntimeException("Failed to delete category.", e);
-        } finally {
-            entityManager.close();
-        }
-    }
-
-    private User getUserWithCategories(EntityManager entityManager, String email) {
-        return entityManager.createQuery("""
-                        SELECT DISTINCT u
-                        FROM User u
-                        LEFT JOIN FETCH u.categories
-                        WHERE LOWER(u.email) = :email
-                        """, User.class)
-                .setParameter("email", email.trim().toLowerCase(Locale.ROOT))
-                .getResultStream()
-                .findFirst()
-                .orElse(null);
-    }
-
-    private String normalizeName(String name) {
-        return name.trim().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
+        categoryRepository.delete(id);
     }
 }

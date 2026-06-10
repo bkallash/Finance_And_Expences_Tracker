@@ -48,6 +48,18 @@ public class CategoriesController {
     @FXML
     private Label messageLabel;
 
+    @FXML
+    private javafx.scene.control.ProgressIndicator loadingIndicator;
+
+    @FXML
+    private javafx.scene.control.Button addEditCategoryButton;
+
+    @FXML
+    private javafx.scene.control.Button deleteButton;
+
+    @FXML
+    private javafx.scene.control.Button clearButton;
+
     private Category selectedCategory;
     private final ObservableList<Category> categories = FXCollections.observableArrayList();
     private String lastCategoryNotFoundKeyword;
@@ -171,8 +183,40 @@ public class CategoriesController {
     }
 
     private void loadCategories() {
-        categories.setAll(categoryService.getAllCategories());
-        refreshCategoriesView();
+        javafx.concurrent.Task<List<Category>> loadTask = categoryService.getAllCategoriesTask();
+
+        loadingIndicator.visibleProperty().bind(loadTask.runningProperty());
+        addEditCategoryButton.disableProperty().bind(loadTask.runningProperty());
+        deleteButton.disableProperty().bind(loadTask.runningProperty());
+        clearButton.disableProperty().bind(loadTask.runningProperty());
+
+        loadTask.setOnSucceeded(event -> {
+            categories.setAll(loadTask.getValue());
+            refreshCategoriesView();
+            unbindTask();
+        });
+
+        loadTask.setOnFailed(event -> {
+            unbindTask();
+            showError("Failed to load categories.");
+            loadTask.getException().printStackTrace();
+        });
+
+        Thread thread = new Thread(loadTask);
+        thread.setDaemon(true);
+        thread.start();
+    }
+
+    private void unbindTask() {
+        loadingIndicator.visibleProperty().unbind();
+        addEditCategoryButton.disableProperty().unbind();
+        deleteButton.disableProperty().unbind();
+        clearButton.disableProperty().unbind();
+        
+        loadingIndicator.setVisible(false);
+        addEditCategoryButton.setDisable(false);
+        deleteButton.setDisable(false);
+        clearButton.setDisable(false);
     }
 
     private void clearForm() {

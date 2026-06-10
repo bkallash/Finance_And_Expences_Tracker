@@ -16,6 +16,7 @@ public class DashboardController {
     private static final String REPORTS_FXML = "/fxml/reports.fxml";
     private static final String CATEGORIES_FXML = "/fxml/categories.fxml";
     private static final String TRANSACTIONS_FXML = "/fxml/transactions.fxml";
+    private static final String STATEMENT_FXML = "/fxml/financial_statement.fxml";
 
     @FXML
     private Label welcomeLabel;
@@ -42,9 +43,14 @@ public class DashboardController {
             return;
         }
 
-        User user = userService.getUserByEmail(userEmail);
-        String firstName = user == null || user.getFirstName() == null ? "" : user.getFirstName().trim();
-        welcomeLabel.setText(firstName.isEmpty() ? DEFAULT_WELCOME_TEXT : "Welcome, " + firstName + "!");
+        javafx.concurrent.Task<model.User> task = userService.getUserByEmailTask(userEmail);
+        task.setOnSucceeded(e -> {
+            model.User user = task.getValue();
+            String firstName = user == null || user.getFirstName() == null ? "" : user.getFirstName().trim();
+            welcomeLabel.setText(firstName.isEmpty() ? DEFAULT_WELCOME_TEXT : "Welcome, " + firstName + "!");
+        });
+        task.setOnFailed(e -> welcomeLabel.setText(DEFAULT_WELCOME_TEXT));
+        new Thread(task).start();
     }
 
     @FXML
@@ -60,6 +66,11 @@ public class DashboardController {
     @FXML
     protected void onReportsButtonClick(ActionEvent event) {
         loadContent(REPORTS_FXML);
+    }
+
+    @FXML
+    protected void onStatementButtonClick(ActionEvent event) {
+        loadContent(STATEMENT_FXML);
     }
 
     @FXML

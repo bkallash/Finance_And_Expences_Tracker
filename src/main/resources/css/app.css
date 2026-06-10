@@ -289,3 +289,19 @@
     -fx-font-size: 17px;
     -fx-font-weight: 800;
 }
+
+.report-text-area {
+    -fx-control-inner-background: #ffffff;
+    -fx-background-color: #ffffff;
+    -fx-background-radius: 12;
+    -fx-border-color: #d9e2ec;
+    -fx-border-radius: 12;
+    -fx-font-family: "Monospaced";
+    -fx-font-size: 13px;
+    -fx-text-fill: #102a43;
+    -fx-padding: 10;
+}
+
+.report-text-area .content {
+    -fx-background-color: transparent;
+}
